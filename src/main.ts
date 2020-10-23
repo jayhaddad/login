@@ -1,4 +1,5 @@
 import * as core from '@actions/core';
+import * as crypto from "crypto";
 import * as exec from '@actions/exec';
 import * as io from '@actions/io';
 
@@ -13,7 +14,7 @@ async function main() {
     try {
         // Set user agent variable
         var isAzCLISuccess = false;
-        let usrAgentRepo = `${process.env.GITHUB_REPOSITORY}`;
+        let usrAgentRepo = crypto.createHash('sha256').update(`${process.env.GITHUB_REPOSITORY}`).digest('hex');
         let actionName = 'AzureLogin';
         let userAgentString = (!!prefix ? `${prefix}+` : '') + `GITHUBACTIONS/${actionName}@v1_${usrAgentRepo}`;
         let azurePSHostEnv = (!!azPSHostEnv ? `${azPSHostEnv}+` : '') + `GITHUBACTIONS/${actionName}@v1_${usrAgentRepo}`;
@@ -22,6 +23,11 @@ async function main() {
 
         azPath = await io.which("az", true);
         await executeAzCliCommand("--version");
+
+        const cloud = core.getInput('cloud', { required: false });
+        if (!!cloud){
+            await executeAzCliCommand(`cloud set --name "${cloud}"`, true);
+        }
 
         let creds = core.getInput('creds', { required: true });
         let secrets = new SecretParser(creds, FormatType.JSON);
@@ -40,7 +46,8 @@ async function main() {
         if (enableAzPSSession) {
             // Attempting Az PS login
             console.log(`Running Azure PS Login`);
-            const spnlogin: ServicePrincipalLogin = new ServicePrincipalLogin(servicePrincipalId, servicePrincipalKey, tenantId, subscriptionId);
+
+            const spnlogin: ServicePrincipalLogin = new ServicePrincipalLogin(servicePrincipalId, servicePrincipalKey, tenantId, subscriptionId,cloud);
             await spnlogin.initialize();
             await spnlogin.login();
         }
@@ -67,5 +74,6 @@ async function executeAzCliCommand(command: string, silent?: boolean) {
         throw new Error(error);
     }
 }
+
 
 main();
